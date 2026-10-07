@@ -1,0 +1,755 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import styled, { keyframes } from 'styled-components';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { Pista8Theme, breakpoints } from '../../../../config/theme';
+import { ModalContentSkeleton } from '../../../../components/SkeletonLoaders';
+import { challengeService } from '../../../../services/challenge.service';
+import type { CompanyChallengeOption } from '../../../../services/challenge.service';
+import { RefreshButton } from '../../../../components/common/RefreshButton';
+import type {
+  InnovationInteractionByDayItem,
+  InnovationStatsResponse,
+} from '../../../../types/models';
+
+const riseIn = keyframes`
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const colors = {
+  bg: '#f7f8fa',
+  card: '#ffffff',
+  border: 'rgba(72, 80, 84, 0.12)',
+  textMain: '#1a1f22',
+  textMuted: '#6b7280',
+  axis: '#7f8791',
+  likes: Pista8Theme.primary,
+  comments: '#ff8f6e',
+  bars: ['#FE410A', '#FF6A3D', '#FF8F6E', '#485054', '#7A838A', '#A8AEB2', '#C4C9CC', '#D9DEE1'],
+};
+
+const MOCK_INNOVATION_STATS: InnovationStatsResponse = {
+  ideasByFaculty: [
+    { facultyId: 1, facultyName: 'Ingenieria', ideasCount: 24, votesCount: 117 },
+    { facultyId: 2, facultyName: 'Medicina', ideasCount: 18, votesCount: 95 },
+    { facultyId: 3, facultyName: 'Ciencias Exactas', ideasCount: 15, votesCount: 71 },
+    { facultyId: 4, facultyName: 'Humanidades', ideasCount: 11, votesCount: 46 },
+  ],
+  interactionsByDay: [
+    { date: '2026-03-28', likes: 12, comments: 4 },
+    { date: '2026-03-29', likes: 14, comments: 5 },
+    { date: '2026-03-30', likes: 11, comments: 3 },
+    { date: '2026-03-31', likes: 17, comments: 7 },
+    { date: '2026-04-01', likes: 20, comments: 8 },
+    { date: '2026-04-02', likes: 16, comments: 6 },
+    { date: '2026-04-03', likes: 18, comments: 7 },
+    { date: '2026-04-04', likes: 22, comments: 9 },
+    { date: '2026-04-05', likes: 19, comments: 8 },
+    { date: '2026-04-06', likes: 15, comments: 4 },
+    { date: '2026-04-07', likes: 24, comments: 10 },
+    { date: '2026-04-08', likes: 26, comments: 11 },
+    { date: '2026-04-09', likes: 21, comments: 8 },
+    { date: '2026-04-10', likes: 18, comments: 6 },
+  ],
+  kpis: {
+    totalIdeas: 68,
+    totalVotes: 329,
+    mostActiveUser: { name: 'Ana Perez', ideaCount: 9 },
+    leadingFaculty: { facultyId: 1, facultyName: 'Ingenieria', ideasCount: 24 },
+  },
+};
+
+const Container = styled.section`
+  animation: ${riseIn} 0.35s ease both;
+  background: radial-gradient(circle at 100% 0%, #fff4ee 0%, ${colors.bg} 56%);
+  border: 1px solid ${colors.border};
+  border-radius: 20px;
+  padding: 32px 24px 24px;
+`;
+
+const Header = styled.header`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 12px;
+  margin-bottom: 40px;
+
+  @media (max-width: ${breakpoints.tablet}) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+`;
+
+const Heading = styled.h2`
+  margin: 0;
+  color: ${Pista8Theme.secondary};
+  font-size: 23px;
+  font-weight: 900;
+`;
+
+const Subheading = styled.p`
+  margin: 6px 0 0;
+  color: ${colors.textMuted};
+  font-size: 13px;
+`;
+
+const KpiGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+
+  @media (max-width: ${breakpoints.tablet}) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: ${breakpoints.mobile}) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const KpiCard = styled.article<{ $compact?: boolean }>`
+  background: ${colors.card};
+  border: 1px solid ${colors.border};
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 8px 20px rgba(72, 80, 84, 0.06);
+  max-width: ${({ $compact }) => ($compact ? '210px' : 'none')};
+  justify-self: ${({ $compact }) => ($compact ? 'start' : 'stretch')};
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+
+  @media (max-width: ${breakpoints.tablet}) {
+    max-width: none;
+    justify-self: stretch;
+  }
+`;
+
+const KpiLabel = styled.p`
+  margin: 0 0 8px;
+  color: ${colors.textMuted};
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+`;
+
+const KpiValue = styled.h3`
+  margin: 0;
+  color: ${colors.textMain};
+  font-size: 20px;
+  line-height: 1;
+`;
+
+const KpiHint = styled.p`
+  margin: 8px 0 0;
+  color: ${colors.textMuted};
+  font-size: 12px;
+`;
+
+const ChartsGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+
+  @media (max-width: ${breakpoints.tablet}) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const ChartCard = styled.article`
+  background: ${colors.card};
+  border: 1px solid ${colors.border};
+  border-radius: 14px;
+  padding: 14px 12px 8px;
+  min-height: 340px;
+`;
+
+const ChartTitle = styled.h4`
+  margin: 0 0 12px;
+  padding: 0 6px;
+  color: ${Pista8Theme.secondary};
+  font-size: 15px;
+  font-weight: 800;
+`;
+
+const ErrorState = styled.div`
+  border-radius: 12px;
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #991b1b;
+  padding: 16px;
+  margin-top: 8px;
+`;
+
+const RetryButton = styled.button`
+  margin-top: 10px;
+  border: none;
+  border-radius: 10px;
+  padding: 9px 14px;
+  background: ${Pista8Theme.primary};
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+`;
+
+const ControlsColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  margin-left: auto;
+  min-width: min(100%, 480px);
+  max-width: 560px;
+
+  @media (max-width: ${breakpoints.tablet}) {
+    align-items: stretch;
+    max-width: 100%;
+  }
+`;
+
+const FiltersRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+
+  @media (max-width: ${breakpoints.mobile}) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const FilterField = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const FilterLabel = styled.span`
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: ${colors.textMuted};
+`;
+
+const SearchInputWrapper = styled.div`
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(72, 80, 84, 0.16);
+  background: white;
+  color: ${colors.textMain};
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px 12px;
+  padding-right: 36px;
+  outline: none;
+  box-shadow: 0 6px 14px rgba(72, 80, 84, 0.05);
+
+  &:focus {
+    border-color: ${Pista8Theme.primary};
+    box-shadow: 0 0 0 3px rgba(254, 65, 10, 0.12);
+  }
+`;
+
+const ClearSearchButton = styled.button`
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: ${colors.textMuted};
+  cursor: pointer;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: ${Pista8Theme.primary};
+    background: ${Pista8Theme.primary}08;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+`;
+
+const ChallengeSelect = styled.select`
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(72, 80, 84, 0.16);
+  background: white;
+  color: ${colors.textMain};
+  font-size: 12px;
+  font-weight: 700;
+  padding: 10px 12px;
+  outline: none;
+  box-shadow: 0 6px 14px rgba(72, 80, 84, 0.05);
+  appearance: none;
+
+  &:focus {
+    border-color: ${Pista8Theme.primary};
+    box-shadow: 0 0 0 3px rgba(254, 65, 10, 0.12);
+  }
+`;
+
+const SearchDropdown = styled.div<{ $isOpen: boolean }>`
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid rgba(72, 80, 84, 0.16);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  max-height: 280px;
+  overflow-y: auto;
+  display: ${({ $isOpen }) => ($isOpen ? 'block' : 'none')};
+  box-shadow: 0 6px 14px rgba(72, 80, 84, 0.08);
+  z-index: 10;
+`;
+
+const SearchResultItem = styled.button`
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 12px 12px;
+  text-align: left;
+  color: ${colors.textMain};
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid rgba(72, 80, 84, 0.08);
+
+  &:hover {
+    background: ${Pista8Theme.primary}12;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  .challenge-title {
+    display: block;
+    color: ${colors.textMain};
+    font-weight: 800;
+  }
+
+  .challenge-status {
+    display: block;
+    color: ${colors.textMuted};
+    font-size: 11px;
+    margin-top: 2px;
+  }
+`;
+
+const SearchEmptyResult = styled.div`
+  padding: 12px;
+  text-align: center;
+  color: ${colors.textMuted};
+  font-size: 12px;
+`;
+
+const EmptyStateContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 280px;
+  text-align: center;
+  padding: 24px;
+`;
+
+const EmptyStateIcon = styled.div`
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: ${Pista8Theme.primary}12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  color: ${Pista8Theme.primary};
+`;
+
+const EmptyStateText = styled.p`
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #64748b;
+  line-height: 1.5;
+  max-width: 280px;
+`;
+
+const EmptyState = ({ message, type }: { message: string; type: 'chart' | 'activity' }) => (
+  <EmptyStateContainer>
+    <EmptyStateIcon>
+      {type === 'chart' ? (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="18" y1="20" x2="18" y2="10" />
+          <line x1="12" y1="20" x2="12" y2="4" />
+          <line x1="6" y1="20" x2="6" y2="14" />
+        </svg>
+      ) : (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+      )}
+    </EmptyStateIcon>
+    <EmptyStateText>{message}</EmptyStateText>
+  </EmptyStateContainer>
+);
+
+const normalizeDateLabel = (rawDate: string) => {
+  const date = new Date(rawDate);
+  if (Number.isNaN(date.getTime())) return rawDate;
+  return date.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' });
+};
+
+const mapInteractionSeries = (items: InnovationInteractionByDayItem[]) =>
+  items.map((item) => ({
+    ...item,
+    label: normalizeDateLabel(item.date),
+  }));
+
+export const CompanyStatsView = () => {
+  const [stats, setStats] = useState<InnovationStatsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedChallengeId, setSelectedChallengeId] = useState<string>('all');
+  const [challengeOptions, setChallengeOptions] = useState<CompanyChallengeOption[]>([]);
+  const [challengeQuery, setChallengeQuery] = useState('');
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+
+  const loadChallengeOptions = useCallback(async () => {
+    try {
+      const options = await challengeService.getCompanyChallenges();
+      setChallengeOptions(Array.isArray(options) ? options : []);
+    } catch (err) {
+      console.error('Error cargando retos de company:', err);
+      setChallengeOptions([]);
+    }
+  }, []);
+
+  const fetchStats = useCallback(async (challengeId?: string) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const useMockByFlag = String(import.meta.env.VITE_USE_INNOVATION_STATS_MOCK || '').toLowerCase() === 'true';
+      if (useMockByFlag) {
+        setStats(MOCK_INNOVATION_STATS);
+        return;
+      }
+
+      const response = await challengeService.getInnovationStats(challengeId);
+      setStats(response);
+    } catch (err) {
+      console.error('Error cargando innovation stats:', err);
+      setStats(MOCK_INNOVATION_STATS);
+      setError('No se pudieron cargar estadísticas en vivo. Se muestran datos mock.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadChallengeOptions();
+  }, [loadChallengeOptions]);
+
+  useEffect(() => {
+    void fetchStats(selectedChallengeId === 'all' ? undefined : selectedChallengeId);
+  }, [fetchStats, selectedChallengeId]);
+
+  const handleRefresh = () => {
+    void fetchStats(selectedChallengeId === 'all' ? undefined : selectedChallengeId);
+  };
+
+  const handleSelectChallenge = (challengeId: string) => {
+    setSelectedChallengeId(challengeId);
+    setChallengeQuery('');
+    setShowSearchDropdown(false);
+  };
+
+  const filteredChallengeOptions = useMemo(
+    () => challengeOptions.filter((challenge) => {
+      const normalizedQuery = challengeQuery.trim().toLowerCase();
+      return !normalizedQuery || challenge.title.toLowerCase().includes(normalizedQuery);
+    }),
+    [challengeOptions, challengeQuery],
+  );
+
+  const challengeOptionsForSelect = useMemo(() => {
+    if (selectedChallengeId === 'all') return filteredChallengeOptions;
+
+    const selectedOption = challengeOptions.find((challenge) => challenge.id === selectedChallengeId);
+    if (!selectedOption) return filteredChallengeOptions;
+    if (filteredChallengeOptions.some((challenge) => challenge.id === selectedChallengeId)) {
+      return filteredChallengeOptions;
+    }
+
+    return [selectedOption, ...filteredChallengeOptions];
+  }, [challengeOptions, filteredChallengeOptions, selectedChallengeId]);
+
+  const interactionSeries = useMemo(
+    () => mapInteractionSeries(stats?.interactionsByDay ?? []),
+    [stats?.interactionsByDay],
+  );
+
+  const totalLikes = useMemo(
+    () => (stats?.interactionsByDay ?? []).reduce((acc, item) => acc + (item.likes || 0), 0),
+    [stats?.interactionsByDay],
+  );
+
+  const totalComments = useMemo(
+    () => (stats?.interactionsByDay ?? []).reduce((acc, item) => acc + (item.comments || 0), 0),
+    [stats?.interactionsByDay],
+  );
+
+  const facultySeries = useMemo(
+    () => (stats?.ideasByFaculty ?? []).map((item, index) => ({ ...item, fill: colors.bars[index % colors.bars.length] })),
+    [stats?.ideasByFaculty],
+  );
+
+  if (loading) {
+    return (
+      <Container>
+        <ModalContentSkeleton rows={8} />
+      </Container>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <Container>
+        <ErrorState>
+          No hay datos para mostrar.
+          <div>
+            <RetryButton onClick={handleRefresh}>Reintentar</RetryButton>
+          </div>
+        </ErrorState>
+      </Container>
+    );
+  }
+
+  const hasFacultyData = facultySeries.length > 0;
+  const hasInteractionsData = interactionSeries.length > 0;
+
+  return (
+    <Container>
+      <Header>
+        <div style={{ marginTop: '28px' }}>
+          <Heading>Resultados de Innovacion</Heading>
+          <Subheading>
+            Vista consolidada de ideas por facultad, interacciones por dia y KPIs principales.
+          </Subheading>
+        </div>
+        <ControlsColumn>
+          <div style={{ alignSelf: 'flex-end', marginBottom: '4px' }}>
+            <RefreshButton 
+              onClick={handleRefresh} 
+              disabled={loading}
+              tooltip="Recargar estadísticas"
+              tooltipPosition="bottom"
+              tooltipAlign="right"
+            />
+          </div>
+          <FiltersRow>
+            <FilterField>
+              <FilterLabel>Buscar por nombre</FilterLabel>
+              <SearchInputWrapper>
+                <SearchInput
+                  value={challengeQuery}
+                  onChange={(event) => {
+                    setChallengeQuery(event.target.value);
+                    setShowSearchDropdown(true);
+                  }}
+                  onFocus={() => challengeQuery && setShowSearchDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowSearchDropdown(false), 150)}
+                  placeholder="Escribe el nombre del reto"
+                  disabled={loading}
+                />
+                {challengeQuery && (
+                  <ClearSearchButton
+                    onClick={() => {
+                      setChallengeQuery('');
+                      setShowSearchDropdown(false);
+                    }}
+                    type="button"
+                    aria-label="Limpiar búsqueda"
+                    title="Limpiar búsqueda"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </ClearSearchButton>
+                )}
+                {challengeQuery && (
+                  <SearchDropdown $isOpen={showSearchDropdown}>
+                    {filteredChallengeOptions.length > 0 ? (
+                      filteredChallengeOptions.map((challenge) => (
+                        <SearchResultItem
+                          key={challenge.id}
+                          onClick={() => handleSelectChallenge(challenge.id)}
+                        >
+                          <span className="challenge-title">{challenge.title}</span>
+                        </SearchResultItem>
+                      ))
+                    ) : (
+                      <SearchEmptyResult>No se encontraron retos con ese nombre</SearchEmptyResult>
+                    )}
+                  </SearchDropdown>
+                )}
+              </SearchInputWrapper>
+            </FilterField>
+            <FilterField>
+              <FilterLabel>Seleccionar reto</FilterLabel>
+              <ChallengeSelect
+                value={selectedChallengeId}
+                onChange={(event) => setSelectedChallengeId(event.target.value)}
+                disabled={loading}
+              >
+                <option value="all">Todos los retos</option>
+                {challengeOptionsForSelect.map((challenge) => (
+                  <option key={challenge.id} value={challenge.id}>
+                    {challenge.title.length > 40 ? challenge.title.slice(0, 37) + '...' : challenge.title}
+                  </option>
+                ))}
+              </ChallengeSelect>
+            </FilterField>
+          </FiltersRow>
+        </ControlsColumn>
+      </Header>
+
+      {error && (
+        <ErrorState>
+          {error}
+          <div>
+            <RetryButton onClick={handleRefresh}>Intentar de nuevo</RetryButton>
+          </div>
+        </ErrorState>
+      )}
+
+      <KpiGrid>
+        <KpiCard $compact>
+          <KpiLabel>Total de ideas</KpiLabel>
+          <KpiValue>{stats.kpis.totalIdeas}</KpiValue>
+          <KpiHint>Ideas publicas recibidas en tus retos.</KpiHint>
+        </KpiCard>
+
+        <KpiCard>
+          <KpiLabel>Total Likes</KpiLabel>
+          <KpiValue>{totalLikes}</KpiValue>
+          <KpiHint>Likes acumulados en ideas publicas.</KpiHint>
+        </KpiCard>
+
+        <KpiCard>
+          <KpiLabel>Total Comentarios</KpiLabel>
+          <KpiValue>{totalComments}</KpiValue>
+          <KpiHint>Comentarios acumulados en ideas publicas.</KpiHint>
+        </KpiCard>
+
+        <KpiCard>
+          <KpiLabel>Usuario mas activo</KpiLabel>
+          <KpiValue>{stats.kpis.mostActiveUser?.name ?? 'Sin datos'}</KpiValue>
+          <KpiHint>
+            {stats.kpis.mostActiveUser
+              ? `${stats.kpis.mostActiveUser.ideaCount} idea${stats.kpis.mostActiveUser.ideaCount === 1 ? '' : 's'} enviadas`
+              : 'Aun no hay actividad suficiente.'}
+          </KpiHint>
+        </KpiCard>
+
+        <KpiCard>
+          <KpiLabel>Área líder</KpiLabel>
+          <KpiValue>{stats.kpis.leadingFaculty?.facultyName ?? 'Sin datos'}</KpiValue>
+          <KpiHint>
+            {stats.kpis.leadingFaculty ? `${stats.kpis.leadingFaculty.ideasCount} idea${stats.kpis.leadingFaculty.ideasCount === 1 ? '' : 's'} publicadas` : 'Aun no hay área destacada.'}
+          </KpiHint>
+        </KpiCard>
+      </KpiGrid>
+
+      <ChartsGrid>
+        <ChartCard>
+          <ChartTitle>Ideas por Facultad</ChartTitle>
+          {hasFacultyData ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={facultySeries} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
+                <XAxis
+                  dataKey="facultyName"
+                  tick={{ fill: colors.axis, fontSize: 11 }}
+                  angle={-16}
+                  textAnchor="end"
+                  height={56}
+                />
+                <YAxis tick={{ fill: colors.axis, fontSize: 11 }} allowDecimals={false} />
+                <Tooltip
+                  cursor={{ fill: '#fff4ee' }}
+                  formatter={(value: unknown) => [`${Number(value) || 0} ideas`, 'Conteo']}
+                  labelFormatter={(label: unknown) => `Facultad: ${String(label)}`}
+                />
+                <Bar dataKey="ideasCount" radius={[6, 6, 0, 0]}>
+                  {facultySeries.map((entry) => (
+                    <Cell key={entry.facultyId} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState message="No hay ideas públicas para graficar por facultad." type="chart" />
+          )}
+        </ChartCard>
+
+        <ChartCard>
+          <ChartTitle>Nivel de interaccion (Likes vs Comentarios por dia)</ChartTitle>
+          {hasInteractionsData ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={interactionSeries} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="4 4" stroke="#eceff1" />
+                <XAxis dataKey="label" tick={{ fill: colors.axis, fontSize: 11 }} />
+                <YAxis tick={{ fill: colors.axis, fontSize: 11 }} allowDecimals={false} />
+                <Tooltip
+                  formatter={(value: unknown, name: unknown) => [Number(value) || 0, name === 'likes' ? 'Likes' : 'Comentarios']}
+                  labelFormatter={(label: unknown) => `Dia: ${String(label)}`}
+                />
+                <Legend formatter={(value: string) => (value === 'likes' ? 'Likes' : 'Comentarios')} />
+                <Line type="monotone" dataKey="likes" stroke={colors.likes} strokeWidth={2.5} dot={false} />
+                <Line type="monotone" dataKey="comments" stroke={colors.comments} strokeWidth={2.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState message="No hay interacciones en los últimos 30 días." type="activity" />
+          )}
+        </ChartCard>
+      </ChartsGrid>
+    </Container>
+  );
+};

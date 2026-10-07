@@ -1,0 +1,14 @@
+# Credenciales - NUNCA subir
+**/serviceAccountKey.json
+**/firebase-admin.json
+
+# Variables de entorno
+.env
+**/.env
+
+# IDEs y Editores
+**/.idea/
+**/.vscode/
+
+# Build artifacts
+**/dist/

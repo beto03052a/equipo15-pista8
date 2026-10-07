@@ -1,0 +1,25 @@
+import {
+  registerDecorator,
+  ValidationOptions,
+  ValidationArguments,
+} from 'class-validator';
+
+export function NoNumbers(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'noNumbers',
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: any, _args: ValidationArguments) {
+          if (typeof value !== 'string' || value.length === 0) return true;
+          return !/\d/.test(value);
+        },
+        defaultMessage(_args: ValidationArguments) {
+          return 'Este campo no permite números. Utiliza únicamente texto descriptivo.';
+        },
+      },
+    });
+  };
+}

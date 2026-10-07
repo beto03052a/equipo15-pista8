@@ -1,0 +1,815 @@
+import React from 'react';
+import { Pista8Theme } from '../../../../config/theme';
+import AnimatedCheckbox from '../../../../components/AnimatedCheckbox';
+
+import type { ChallengeStatus } from '../../../../types/models';
+import type { ChallengeFormData, Errors } from './useChallengeForm';
+import { WORD_LIMITS, formatDate } from './useChallengeForm';
+
+import BackButton from '../../../../components/common/BackButton';
+import InfoTooltip from '../../../../components/common/InfoTooltip';
+import {
+  Wrapper, TopRow, FormTitle, FormCard, PreviewCard,
+  PreviewLabel, PreviewTitle, PreviewSection, PreviewSectionLabel,
+  PreviewText, PreviewLogoWrap, PreviewDateRow, PreviewCriteriaList,
+  PreviewCriteriaChip, PreviewWeightBadge, PreviewTypeBadge, Divider,
+  SectionTitle, FormGrid, FullSpan, FieldGroup, Label, LockedBadge,
+  InputField, TextAreaField, FlexibleTextAreaField, CharCount, ErrorText, CheckboxRow,
+  LogoUploadArea, LogoThumb, LogoPlaceholder, UploadText,
+  CriteriaToggleBtn, CriteriaPanel, CriterionRow, CriterionName,
+  WeightInput, WeightUnit, AddCriterionBtn,
+  CustomCriterionInput, RemoveBtn, TotalWeightBar, BtnRow, Btn, ConfirmBanner, OptionalToggleBtn, InputWrapper
+} from './challengeFormStyles';
+
+const LightboxOverlay: React.FC<{ src: string; onClose: () => void }> = ({ src, onClose }) => (
+  <div onClick={onClose} style={{
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 9999, cursor: 'zoom-out', animation: 'fadeIn 0.2s ease',
+  }}>
+    <img src={src} alt="logo preview" onClick={e => e.stopPropagation()} style={{
+      maxWidth: '80vw', maxHeight: '80vh', borderRadius: 20,
+      boxShadow: '0 24px 80px rgba(0,0,0,0.5)', objectFit: 'contain',
+    }} />
+    <button onClick={onClose} style={{
+      position: 'absolute', top: 20, right: 24, background: 'rgba(255,255,255,0.15)',
+      border: 'none', color: 'white', width: 40, height: 40,
+      borderRadius: '50%', fontSize: 20, cursor: 'pointer', display: 'flex',
+      alignItems: 'center', justifyContent: 'center',
+    }}>✕</button>
+  </div>
+);
+
+export interface ChallengeFormFieldsProps {
+  form: ChallengeFormData;
+  errors: Errors;
+  saving: boolean;
+  readOnlyMode: boolean;
+  showConfirm: boolean;
+  setShowConfirm: (v: boolean) => void;
+  criteriaOpen: boolean;
+  addingCustom: boolean;
+  setAddingCustom: (v: boolean) => void;
+  customName: string;
+  setCustomName: (v: string) => void;
+  customDescription: string;
+  setCustomDescription: (v: string) => void;
+  customError: string;
+  setCustomError: (v: string) => void;
+  lightboxOpen: boolean;
+  setLightboxOpen: (v: boolean) => void;
+  logoError: string;
+  dbFaculties: any[];
+  criteriaRef: React.RefObject<HTMLDivElement | null>;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  isEditMode: boolean;
+  hasIdeas: boolean;
+  criteriaOnlyMode: boolean;
+  today: string;
+  totalWeight: number;
+  locked: (field: 'core' | 'flexible' | 'criteria') => boolean;
+  updateField: <K extends keyof ChallengeFormData>(key: K, val: ChallengeFormData[K]) => void;
+  handleLogoChange: (e: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
+  updateCriterion: (id: string, patch: Partial<import('../../../../types/models').EvaluationCriterion>) => void;
+  removeCriterion: (id: string) => void;
+  addCustomCriterion: () => void;
+  handleBack: () => void;
+  handleSave: (status: ChallengeStatus) => Promise<void>;
+  toggleCriteria: () => void;
+  onBack: () => void;
+}
+
+export const ChallengeFormFields: React.FC<ChallengeFormFieldsProps> = ({
+  form,
+  errors,
+  saving,
+  showConfirm,
+  setShowConfirm,
+  criteriaOpen,
+  addingCustom,
+  setAddingCustom,
+  customName,
+  setCustomName,
+  customDescription,
+  setCustomDescription,
+  customError,
+  setCustomError,
+  lightboxOpen,
+  setLightboxOpen,
+  logoError,
+  dbFaculties,
+  criteriaRef,
+  fileInputRef,
+  isEditMode,
+  hasIdeas,
+  criteriaOnlyMode,
+  today,
+  totalWeight,
+  locked,
+  updateField,
+  handleLogoChange,
+  updateCriterion,
+  removeCriterion,
+  addCustomCriterion,
+  handleBack,
+  handleSave,
+  toggleCriteria,
+  onBack,
+  readOnlyMode,
+}) => {
+  const [showOptionals, setShowOptionals] = React.useState(false);
+  const [facultyDropdownOpen, setFacultyDropdownOpen] = React.useState(false);
+
+  const countWords = (val: string) =>
+    val.trim().split(/\s+/).filter(Boolean).length;
+
+  const LockIcon = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+
+  return (
+  <>
+    {readOnlyMode && (
+      <ConfirmBanner style={{ marginBottom: 20, borderColor: '#f59e0b', background: 'linear-gradient(180deg, rgba(245,158,11,0.12), rgba(254,65,10,0.06))' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>
+          Estás en modo lectura ahora. No puedes crear ni editar retos durante esta sesión.
+        </span>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#a16207', fontSize: 12, fontWeight: 800 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: '#f59e0b', display: 'inline-block' }} />
+          Solo lectura
+        </div>
+      </ConfirmBanner>
+    )}
+
+    {lightboxOpen && form.logoUrl && (
+      <LightboxOverlay src={form.logoUrl} onClose={() => setLightboxOpen(false)} />
+    )}
+    <TopRow>
+      <BackButton onClick={handleBack} />
+      <FormTitle>
+        {isEditMode
+          ? criteriaOnlyMode
+            ? 'Editar criterios de evaluación'
+            : 'Editar Reto'
+          : 'Crear Nuevo Reto'}
+      </FormTitle>
+    </TopRow>
+
+    {showConfirm && (
+      <ConfirmBanner>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#92400e' }}>
+          Tienes cambios sin guardar. Si sales ahora perderás la información.
+        </span>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Btn onClick={() => setShowConfirm(false)}>Seguir editando</Btn>
+          <Btn $primary onClick={() => { setShowConfirm(false); onBack(); }}>Salir sin guardar</Btn>
+        </div>
+      </ConfirmBanner>
+    )}
+
+    {hasIdeas && isEditMode && !criteriaOnlyMode && (
+      <div style={{ background: '#fef3c7', border: '2px solid #f59e0b', borderRadius: 14,
+        padding: '12px 20px', marginBottom: 20, fontSize: 13, fontWeight: 600, color: '#92400e' }}>
+        Este reto ya tiene ideas postuladas. Título, descripción y contexto están bloqueados, pero puedes editar los criterios de evaluación.
+      </div>
+    )}
+
+    {criteriaOnlyMode && (
+      <div style={{ 
+        background: 'rgba(254, 65, 10, 0.05)', 
+        border: `2px solid ${Pista8Theme.primary}`, 
+        borderRadius: 14,
+        padding: '16px 20px', 
+        marginBottom: 20, 
+        fontSize: 13.5, 
+        fontWeight: 700, 
+        color: '#485054',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        boxShadow: '0 4px 12px rgba(254, 65, 10, 0.08)'
+      }}>
+        <div style={{ background: Pista8Theme.primary, borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </div>
+        <span style={{ lineHeight: 1.45 }}>
+          Solo puedes modificar los criterios de evaluación. Si los cambias, las evaluaciones de los jueces se reiniciarán.
+        </span>
+      </div>
+    )}
+
+    <Wrapper>
+      <FormCard>
+        <SectionTitle>Información del Reto</SectionTitle>
+        <FormGrid>
+
+          <FullSpan>
+            <FieldGroup>
+              <Label>Logo del reto</Label>
+              <LogoUploadArea $hasImage={!!form.logoUrl} onClick={() => !locked('core') && fileInputRef.current?.click()} style={{ cursor: locked('core') ? 'not-allowed' : 'pointer', opacity: locked('core') ? 0.92 : 1 }}>
+                {form.logoUrl
+                  ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1 }}>
+                      <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <LogoThumb
+                          src={form.logoUrl}
+                          alt="logo"
+                          style={{ width: 72, height: 72, borderRadius: 16, cursor: 'zoom-in' }}
+                          onClick={e => { e.stopPropagation(); setLightboxOpen(true); }}
+                          title="Clic para ver en grande"
+                        />
+                        <div style={{
+                          position: 'absolute', bottom: 4, right: 4,
+                          background: 'rgba(0,0,0,0.5)', borderRadius: 6, padding: '2px 4px',
+                          fontSize: 9, color: 'white', fontWeight: 700, pointerEvents: 'none',
+                        }}>🔍</div>
+                      </div>
+                      <UploadText>
+                        <p>Cambiar logo</p>
+                        <span>JPG, PNG o WEBP · Se convierte automáticamente a WebP</span>
+                        <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: Pista8Theme.primary }}>Haz clic en la imagen para verla en grande</span>
+                      </UploadText>
+                    </div>
+                  )
+                  : (
+                    <>
+                      <LogoPlaceholder>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#c0c8d0" strokeWidth="2">
+                          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/>
+                          <polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                      </LogoPlaceholder>
+                      <UploadText>
+                        <p>Subir logo del reto</p>
+                        <span>JPG, PNG o WEBP · Se convierte automáticamente a WebP</span>
+                      </UploadText>
+                    </>
+                  )
+                }
+                {form.logoUrl && !readOnlyMode && (
+                  <Btn style={{ padding: '8px 14px', fontSize: 12, flexShrink: 0 }}
+                    onClick={e => { e.stopPropagation(); updateField('logoUrl', ''); }}>
+                    Quitar
+                  </Btn>
+                )}
+              </LogoUploadArea>
+              <input ref={fileInputRef as React.Ref<HTMLInputElement>} type="file" accept=".jpg,.jpeg,.png,.webp"
+                style={{ display: 'none' }} onChange={handleLogoChange} />
+              {logoError && <ErrorText style={{ marginTop: 4 }}>{logoError}</ErrorText>}
+            </FieldGroup>
+          </FullSpan>
+
+          <FullSpan>
+            <FieldGroup>
+              <Label $locked={locked('core')}>
+                Título del reto *
+                {locked('core') && <LockedBadge $tooltipText="No editable" $tooltipPosition="top" $tooltipAlign="center"><LockIcon /></LockedBadge>}
+              </Label>
+              <InputField $locked={locked('core')} $error={!!errors.title}
+                placeholder="Ej: Optimización de procesos logísticos"
+                value={form.title} readOnly={locked('core')}
+                onChange={e => !locked('core') && updateField('title', e.target.value)} />
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                {errors.title ? <ErrorText>{errors.title}</ErrorText> : <span />}
+                <CharCount
+                  $over={countWords(form.title) > WORD_LIMITS.title.max}
+                  $under={countWords(form.title) > 0 && countWords(form.title) < WORD_LIMITS.title.min}
+                  $ok={countWords(form.title) >= WORD_LIMITS.title.min && countWords(form.title) <= WORD_LIMITS.title.max}
+                >
+                  {countWords(form.title) < WORD_LIMITS.title.min && countWords(form.title) > 0
+                    ? <>{countWords(form.title)} <span style={{ opacity: 0.6 }}>/ mín. {WORD_LIMITS.title.min} palabras</span></>
+                    : countWords(form.title) > WORD_LIMITS.title.max
+                    ? <>{countWords(form.title)}/{WORD_LIMITS.title.max} palabras</>  
+                    : countWords(form.title) === 0
+                    ? <span style={{ fontWeight: 600, color: '#c0c8d0' }}>mín. {WORD_LIMITS.title.min} · máx. {WORD_LIMITS.title.max} palabras</span>
+                    : <>✓ {countWords(form.title)}/{WORD_LIMITS.title.max} palabras</>}
+                </CharCount>
+              </div>
+            </FieldGroup>
+          </FullSpan>
+
+          <FieldGroup>
+            <Label $locked={locked('core')}>
+              Descripción del problema *
+              {locked('core') && <LockedBadge $tooltipText="No editable" $tooltipPosition="top" $tooltipAlign="center"><LockIcon /></LockedBadge>}
+            </Label>
+            <TextAreaField $locked={locked('core')} $error={!!errors.problemDescription}
+              placeholder="Describe el problema que quieres resolver..."
+              value={form.problemDescription} readOnly={locked('core')}
+              onChange={e => !locked('core') && updateField('problemDescription', e.target.value)} />
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              {errors.problemDescription ? <ErrorText>{errors.problemDescription}</ErrorText> : <span />}
+              <CharCount
+                $over={countWords(form.problemDescription) > WORD_LIMITS.content.max}
+                $under={countWords(form.problemDescription) > 0 && countWords(form.problemDescription) < WORD_LIMITS.content.min}
+                $ok={countWords(form.problemDescription) >= WORD_LIMITS.content.min && countWords(form.problemDescription) <= WORD_LIMITS.content.max}
+              >
+                {countWords(form.problemDescription) < WORD_LIMITS.content.min && countWords(form.problemDescription) > 0
+                  ? <>{countWords(form.problemDescription)} <span style={{ opacity: 0.6 }}>/ mín. {WORD_LIMITS.content.min} palabras</span></>
+                  : countWords(form.problemDescription) > WORD_LIMITS.content.max
+                  ? <>{countWords(form.problemDescription)}/{WORD_LIMITS.content.max} palabras</>
+                  : countWords(form.problemDescription) === 0
+                  ? <span style={{ fontWeight: 600, color: '#c0c8d0' }}>mín. {WORD_LIMITS.content.min} · máx. {WORD_LIMITS.content.max} palabras</span>
+                  : <>✓ {countWords(form.problemDescription)}/{WORD_LIMITS.content.max} palabras</>}
+              </CharCount>
+            </div>
+          </FieldGroup>
+
+          <FieldGroup>
+            <Label $locked={locked('core')}>
+              Contexto de la organización *
+              {locked('core') && <LockedBadge $tooltipText="No editable" $tooltipPosition="top" $tooltipAlign="center"><LockIcon /></LockedBadge>}
+            </Label>
+            <TextAreaField $locked={locked('core')} $error={!!errors.companyContext}
+              placeholder="Información relevante sobre tu organización..."
+              value={form.companyContext} readOnly={locked('core')}
+              onChange={e => !locked('core') && updateField('companyContext', e.target.value)} />
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              {errors.companyContext ? <ErrorText>{errors.companyContext}</ErrorText> : <span />}
+              <CharCount
+                $over={countWords(form.companyContext) > WORD_LIMITS.content.max}
+                $under={countWords(form.companyContext) > 0 && countWords(form.companyContext) < WORD_LIMITS.content.min}
+                $ok={countWords(form.companyContext) >= WORD_LIMITS.content.min && countWords(form.companyContext) <= WORD_LIMITS.content.max}
+              >
+                {countWords(form.companyContext) < WORD_LIMITS.content.min && countWords(form.companyContext) > 0
+                  ? <>{countWords(form.companyContext)} <span style={{ opacity: 0.6 }}>/ mín. {WORD_LIMITS.content.min} palabras</span></>
+                  : countWords(form.companyContext) > WORD_LIMITS.content.max
+                  ? <>{countWords(form.companyContext)}/{WORD_LIMITS.content.max} palabras</>
+                  : countWords(form.companyContext) === 0
+                  ? <span style={{ fontWeight: 600, color: '#c0c8d0' }}>mín. {WORD_LIMITS.content.min} · máx. {WORD_LIMITS.content.max} palabras</span>
+                  : <>✓ {countWords(form.companyContext)}/{WORD_LIMITS.content.max} palabras</>}
+              </CharCount>
+            </div>
+          </FieldGroup>
+
+          <FieldGroup>
+            <Label $locked={locked('core')}>
+              Reglas de participación *
+              {locked('core') && <LockedBadge $tooltipText="No editable" $tooltipPosition="top" $tooltipAlign="center"><LockIcon /></LockedBadge>}
+            </Label>
+            <FlexibleTextAreaField placeholder="1. Primera regla..."
+              value={form.participationRules}
+              readOnly={locked('core')}
+              $error={!!errors.participationRules}
+              $locked={locked('core')}
+              onChange={e => {
+                if (locked('core')) return;
+                const val = e.target.value;
+                if (form.participationRules === '' && val.length === 1 && val !== '1') {
+                  updateField('participationRules', `1. ${val}`);
+                } else {
+                  updateField('participationRules', val);
+                }
+              }}
+              onKeyDown={e => {
+                if (locked('core')) return;
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const target = e.target as HTMLTextAreaElement;
+                  const val = target.value;
+                  const cursor = target.selectionStart;
+                  const textBefore = val.substring(0, cursor);
+                  const textAfter = val.substring(cursor);
+                  const lines = textBefore.split('\n');
+                  const currentLine = lines[lines.length - 1];
+                  const match = currentLine.match(/^(\d+)\.\s(.*)/);
+                  
+                  if (match) {
+                    if (!match[2].trim()) {
+                      // Remove empty list item
+                      const newTextBefore = lines.slice(0, -1).join('\n') + (lines.length > 1 ? '\n' : '');
+                      updateField('participationRules', newTextBefore + textAfter);
+                      setTimeout(() => {
+                        target.selectionStart = newTextBefore.length;
+                        target.selectionEnd = newTextBefore.length;
+                      }, 0);
+                    } else {
+                      const nextNum = parseInt(match[1], 10) + 1;
+                      const insert = `\n${nextNum}. `;
+                      updateField('participationRules', textBefore + insert + textAfter);
+                      setTimeout(() => {
+                        target.selectionStart = cursor + insert.length;
+                        target.selectionEnd = cursor + insert.length;
+                      }, 0);
+                    }
+                  } else {
+                    updateField('participationRules', textBefore + '\n' + textAfter);
+                    setTimeout(() => {
+                      target.selectionStart = cursor + 1;
+                      target.selectionEnd = cursor + 1;
+                    }, 0);
+                  }
+                }
+              }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+              {errors.participationRules ? <ErrorText>{errors.participationRules}</ErrorText> : <span />}
+              <CharCount
+                $over={countWords(form.participationRules) > WORD_LIMITS.rules.max}
+                $under={countWords(form.participationRules) > 0 && countWords(form.participationRules) < WORD_LIMITS.rules.min}
+                $ok={countWords(form.participationRules) >= WORD_LIMITS.rules.min && countWords(form.participationRules) <= WORD_LIMITS.rules.max}
+              >
+                {countWords(form.participationRules) < WORD_LIMITS.rules.min && countWords(form.participationRules) > 0
+                  ? <>{countWords(form.participationRules)} <span style={{ opacity: 0.6 }}>/ mín. {WORD_LIMITS.rules.min} palabras</span></>
+                  : countWords(form.participationRules) > WORD_LIMITS.rules.max
+                  ? <>{countWords(form.participationRules)}/{WORD_LIMITS.rules.max} palabras</>
+                  : countWords(form.participationRules) === 0
+                  ? <span style={{ fontWeight: 600, color: '#c0c8d0' }}>mín. {WORD_LIMITS.rules.min} · máx. {WORD_LIMITS.rules.max} palabras</span>
+                  : <>✓ {countWords(form.participationRules)}/{WORD_LIMITS.rules.max} palabras</>}
+              </CharCount>
+            </div>
+          </FieldGroup>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <FieldGroup style={{ marginBottom: 0 }}>
+              <Label $locked={locked('core')}>
+                Área de interés
+                {locked('core') && <LockedBadge $tooltipText="No editable" $tooltipPosition="top" $tooltipAlign="center"><LockIcon /></LockedBadge>}
+              </Label>
+              <div style={{ position: 'relative' }}>
+                <InputField
+                  as="div"
+                  disabled={locked('core') || form.isPrivate}
+                  onClick={() => !(locked('core') || form.isPrivate) && setFacultyDropdownOpen(!facultyDropdownOpen)}
+                  style={{ cursor: (locked('core') || form.isPrivate) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px' }}
+                >
+                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {form.isPrivate
+                      ? 'Privado'
+                      : form.facultyIds?.length === 0 
+                        ? 'Todas las áreas' 
+                        : `${form.facultyIds?.length} área(s) seleccionada(s)`}
+                  </span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transform: facultyDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </InputField>
+                {facultyDropdownOpen && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: 'white', border: '1px solid #e2e8f0', borderRadius: 12, padding: 8, zIndex: 50, boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}>
+                    <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', borderRadius: 8, transition: 'background 0.15s' }}>
+                        <AnimatedCheckbox checked={form.facultyIds?.length === 0} onChange={() => updateField('facultyIds', [])} />
+                        <span style={{ fontSize: 13, fontWeight: 500 }}>Todas las áreas</span>
+                      </label>
+                      {(dbFaculties.length > 0 ? dbFaculties.filter((f: any) => f.name !== 'Todas') : []).map((f: any) => {
+                        const label = f.name.replace(/^Facultad de\s+/i, '');
+                        const isChecked = form.facultyIds?.includes(f.id);
+                        return (
+                          <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', borderRadius: 8, transition: 'background 0.15s' }}>
+                            <AnimatedCheckbox 
+                              checked={isChecked} 
+                              onChange={() => {
+                                const curr = form.facultyIds || [];
+                                if (isChecked) {
+                                  updateField('facultyIds', curr.filter(id => id !== f.id));
+                                } else {
+                                  updateField('facultyIds', [...curr, f.id]);
+                                }
+                              }} 
+                            />
+                            <span style={{ fontSize: 13 }}>{label}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </FieldGroup>
+
+            <div style={{ display: 'flex', gap: 12, width: '100%' }}>
+              <FieldGroup style={{ marginBottom: 0, flex: 1, minWidth: 0 }}>
+                <Label $locked={locked('core')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Fecha inicio
+                  <InfoTooltip text="Opcional. Si no seleccionas una fecha, el reto se publicará de inmediato." size={14} />
+                </Label>
+                <InputWrapper $tooltipText="Mostrar el selector de fecha y hora locales" $tooltipPosition="bottom" $tooltipAlign="center">
+                  <InputField type="datetime-local" min={today} $locked={locked('core')} $error={!!errors.startDate}
+                    title=" "
+                    value={form.startDate} readOnly={locked('core')}
+                    style={{ minWidth: 0, padding: '14px 10px', fontSize: 13, width: '100%' }}
+                    onChange={e => !locked('core') && updateField('startDate', e.target.value)} />
+                </InputWrapper>
+                {errors.startDate && <ErrorText>{errors.startDate}</ErrorText>}
+              </FieldGroup>
+              <FieldGroup style={{ marginBottom: 0, flex: 1, minWidth: 0 }}>
+                <Label $locked={locked('core')} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  Fecha cierre
+                  {locked('core') && <LockedBadge $tooltipText="No editable" $tooltipPosition="top" $tooltipAlign="center"><LockIcon /></LockedBadge>}
+                  <InfoTooltip text="Opcional. Si no seleccionas una fecha, el reto cerrará automáticamente hoy a las 23:59." size={14} />
+                </Label>
+                <InputWrapper $tooltipText="Mostrar el selector de fecha y hora locales" $tooltipPosition="bottom" $tooltipAlign="center">
+                  <InputField type="datetime-local" min={form.startDate || today} $error={!!errors.endDate}
+                    title=" "
+                    value={form.endDate}
+                    readOnly={locked('core')}
+                    $locked={locked('core')}
+                    style={{ minWidth: 0, padding: '14px 10px', fontSize: 13, width: '100%' }}
+                    onChange={e => !locked('core') && updateField('endDate', e.target.value)} />
+                </InputWrapper>
+                {errors.endDate && <ErrorText>{errors.endDate}</ErrorText>}
+              </FieldGroup>
+            </div>
+
+              <CheckboxRow $locked={locked('core')} style={{ marginTop: 2, padding: '14px', border: '1.5px solid rgba(72,80,84,0.18)', borderRadius: 12 }}>
+              <AnimatedCheckbox checked={form.isPrivate}
+                disabled={locked('core')}
+                onChange={e => !locked('core') && updateField('isPrivate', e.target.checked)} />
+              Reto privado
+            </CheckboxRow>
+
+
+          </div>
+        </FormGrid>
+
+        <Divider style={{ margin: '28px 0' }} />
+
+        <div ref={criteriaRef}>
+          <CriteriaToggleBtn $open={criteriaOpen} onClick={() => !readOnlyMode && toggleCriteria()} type="button" disabled={readOnlyMode} style={{ cursor: readOnlyMode ? 'not-allowed' : 'pointer', opacity: readOnlyMode ? 0.85 : 1 }}>
+            <span>Criterios de Evaluación</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </CriteriaToggleBtn>
+
+          {criteriaOpen && (
+            <CriteriaPanel style={{ marginTop: 12 }}>
+              {locked('criteria') && (
+                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>
+                  Criterios bloqueados porque el reto ya finalizó.
+                </p>
+              )}
+
+              {!form.evaluationCriteria.some(c => c.enabled) && (
+                <div style={{ background: '#f8fafc', borderLeft: `3px solid ${Pista8Theme.primary}`, borderRadius: '0 8px 8px 0', padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                  Al no habilitar ningún criterio, el sistema aplicará un reparto automático: Deseabilidad (33%), Factibilidad (33%) y Alineación (34%).
+                </div>
+              )}
+
+              <p style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#a8b0b8', margin: '0 0 6px' }}>Obligatorios</p>
+              {form.evaluationCriteria.filter(c => !c.isOptional && !c.isCustom).map(c => (
+                <CriterionRow key={c.id}>
+                  <AnimatedCheckbox checked={c.enabled}
+                    disabled={locked('criteria')}
+                    onChange={e => updateCriterion(c.id, { enabled: e.target.checked })} />
+                  <CriterionName $enabled={c.enabled} $locked={locked('criteria')}>{c.name}</CriterionName>
+                  {c.description && (
+                    <span style={{ marginLeft: 2, display: 'inline-flex', alignItems: 'center' }}>
+                      <InfoTooltip text={c.description} size={16} />
+                    </span>
+                  )}
+                  <WeightInput type="number" min={0} max={100}
+                    value={c.weight === 0 ? '' : c.weight}
+                    disabled={!c.enabled || locked('criteria')} placeholder="0"
+                    onChange={e => {
+                      const raw = e.target.value;
+                      if (raw === '') { updateCriterion(c.id, { weight: 0 }); return; }
+                      const v = parseInt(raw, 10);
+                      if (!isNaN(v)) updateCriterion(c.id, { weight: Math.min(100, v) });
+                    }} />
+                  <WeightUnit>%</WeightUnit>
+                </CriterionRow>
+              ))}
+
+              {form.evaluationCriteria.filter(c => c.isOptional).length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <OptionalToggleBtn type="button" $open={showOptionals} onClick={() => setShowOptionals(!showOptionals)}>
+                    Opcional
+                    <span className="icon-circle">
+                      {showOptionals ? '−' : '+'}
+                    </span>
+                  </OptionalToggleBtn>
+                  {showOptionals && form.evaluationCriteria.filter(c => c.isOptional).map(c => (
+                    <CriterionRow key={c.id}>
+                      <AnimatedCheckbox checked={c.enabled}
+                        disabled={locked('criteria')}
+                        onChange={e => updateCriterion(c.id, { enabled: e.target.checked })} />
+                      <CriterionName $enabled={c.enabled} $locked={locked('criteria')}>{c.name}</CriterionName>
+                      {c.description && (
+                        <span style={{ marginLeft: 2, display: 'inline-flex', alignItems: 'center' }}>
+                          <InfoTooltip text={c.description} size={16} />
+                        </span>
+                      )}
+                      <WeightInput type="number" min={0} max={100}
+                        value={c.weight === 0 ? '' : c.weight}
+                        disabled={!c.enabled || locked('criteria')} placeholder="0"
+                        onChange={e => {
+                          const raw = e.target.value;
+                          if (raw === '') { updateCriterion(c.id, { weight: 0 }); return; }
+                          const v = parseInt(raw, 10);
+                          if (!isNaN(v)) updateCriterion(c.id, { weight: Math.min(100, v) });
+                        }} />
+                      <WeightUnit>%</WeightUnit>
+                    </CriterionRow>
+                  ))}
+                </div>
+              )}
+
+              {form.evaluationCriteria.filter(c => c.isCustom).map(c => (
+                <CriterionRow key={c.id}>
+                  <AnimatedCheckbox checked={c.enabled}
+                    disabled={locked('criteria')}
+                    onChange={e => updateCriterion(c.id, { enabled: e.target.checked })} />
+                  <CriterionName $enabled={c.enabled} $locked={locked('criteria')}>
+                    {c.name}
+                    {c.description && (
+                      <span style={{ marginLeft: 6, display: 'inline-flex', alignItems: 'center' }}>
+                        <InfoTooltip text={c.description} size={16} />
+                      </span>
+                    )}
+                  </CriterionName>
+                  <WeightInput type="number" min={0} max={100}
+                    value={c.weight === 0 ? '' : c.weight}
+                    disabled={!c.enabled || locked('criteria')} placeholder="0"
+                    onChange={e => {
+                      const raw = e.target.value;
+                      if (raw === '') { updateCriterion(c.id, { weight: 0 }); return; }
+                      const v = parseInt(raw, 10);
+                      if (!isNaN(v)) updateCriterion(c.id, { weight: Math.min(100, v) });
+                    }} />
+                  <WeightUnit>%</WeightUnit>
+                  {!locked('criteria') && (
+                    <RemoveBtn type="button" onClick={() => removeCriterion(c.id)}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </RemoveBtn>
+                  )}
+                </CriterionRow>
+              ))}
+
+              {form.evaluationCriteria.some(c => c.enabled) && (
+                <TotalWeightBar $total={totalWeight}>
+                  <span style={{ fontSize: 12, fontWeight: 700, flex: 1, color: '#485054' }}>Total asignado</span>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: totalWeight > 100 ? '#ef4444' : totalWeight === 100 ? '#22c55e' : '#485054' }}>{totalWeight}%</span>
+                  {totalWeight > 100 && <ErrorText>Supera el 100%</ErrorText>}
+                  {totalWeight === 100 && <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 700 }}>✓ Perfecto</span>}
+                </TotalWeightBar>
+              )}
+
+              {!locked('criteria') && !readOnlyMode && (
+                addingCustom ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8, padding: 16, background: 'white', borderRadius: 12, border: '1px solid rgba(72,80,84,0.1)' }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <CustomCriterionInput autoFocus placeholder="Nombre del criterio (máx. 10 palabras)"
+                        style={{ minWidth: 200, flex: 1 }}
+                        value={customName}
+                        onChange={e => { setCustomName(e.target.value); setCustomError(''); }}
+                        onKeyDown={e => e.key === 'Enter' && addCustomCriterion()} />
+                      <CustomCriterionInput placeholder="Descripción (opcional)"
+                        style={{ minWidth: 200, flex: 1 }}
+                        value={customDescription}
+                        onChange={e => setCustomDescription(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && addCustomCriterion()} />
+                    </div>
+                    {customError && <ErrorText style={{ marginTop: '-4px' }}>{customError}</ErrorText>}
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+                      <Btn style={{ padding: '10px 16px', fontSize: 12 }} onClick={() => { setAddingCustom(false); setCustomName(''); setCustomDescription(''); setCustomError(''); }} disabled={readOnlyMode}>
+                        Cancelar
+                      </Btn>
+                      <Btn $primary style={{ padding: '10px 20px', fontSize: 12 }} onClick={addCustomCriterion} disabled={readOnlyMode}>Añadir</Btn>
+                    </div>
+                  </div>
+                ) : (
+                  <AddCriterionBtn type="button" onClick={() => setAddingCustom(true)}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    Añadir Criterio Personalizado
+                  </AddCriterionBtn>
+                )
+              )}
+            </CriteriaPanel>
+          )}
+        </div>
+
+        <BtnRow>
+          <Btn type="button" onClick={handleBack} disabled={readOnlyMode}>Cancelar</Btn>
+          {(!isEditMode || form.status === 'Borrador' || form.status === 'DRAFT') && (
+            <Btn $outline disabled={saving || readOnlyMode} onClick={() => handleSave('Borrador')}>
+              Guardar borrador
+            </Btn>
+          )}
+          <Btn $primary disabled={saving || readOnlyMode} onClick={() => handleSave((form.status === 'Borrador' || form.status === 'DRAFT') ? 'Activo' : form.status)}>
+            {saving
+              ? 'Guardando...'
+              : criteriaOnlyMode
+                ? 'Guardar criterios'
+                : (isEditMode && form.status !== 'Borrador' && form.status !== 'DRAFT')
+                  ? 'Guardar cambios'
+                  : 'Publicar reto'}
+          </Btn>
+        </BtnRow>
+      </FormCard>
+
+      <PreviewCard>
+        <PreviewLabel>Vista previa en vivo</PreviewLabel>
+
+        {form.logoUrl && (
+          <PreviewLogoWrap>
+            <img src={form.logoUrl} alt="logo" />
+          </PreviewLogoWrap>
+        )}
+
+        <PreviewTitle>{form.title || 'Título del reto...'}</PreviewTitle>
+
+        <div style={{ textAlign: 'center', fontSize: 11, fontWeight: 800, color: Pista8Theme.primary, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 12, marginTop: 8, wordBreak: 'break-word' }}>
+          {(() => {
+            if (form.isPrivate) return 'Privado';
+            if (!form.facultyIds || form.facultyIds.length === 0) return 'Todas las Áreas';
+            
+            const names = form.facultyIds.map(id => {
+              const dbFac = dbFaculties?.find((f: any) => f.id === id);
+              if (dbFac) {
+                return dbFac.name.startsWith('Facultad') ? dbFac.name : `Facultad de ${dbFac.name}`;
+              }
+              return 'Facultad';
+            });
+            return names.join(', ');
+          })()}
+        </div>
+
+        {(form.startDate || form.endDate) && (
+          <PreviewDateRow>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            {formatDate(form.startDate)} — {formatDate(form.endDate)}
+          </PreviewDateRow>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+          <PreviewTypeBadge $isPrivate={form.isPrivate}>
+            {form.isPrivate ? 'Reto privado' : 'Reto público'}
+          </PreviewTypeBadge>
+        </div>
+
+
+
+        {form.problemDescription && (
+          <PreviewSection>
+            <PreviewSectionLabel>Descripción del problema</PreviewSectionLabel>
+            <PreviewText>{form.problemDescription}</PreviewText>
+          </PreviewSection>
+        )}
+
+        {form.companyContext && (
+          <PreviewSection>
+            <PreviewSectionLabel>Contexto de la organización</PreviewSectionLabel>
+            <PreviewText>{form.companyContext}</PreviewText>
+          </PreviewSection>
+        )}
+
+        {form.participationRules && (
+          <PreviewSection>
+            <PreviewSectionLabel>Reglas de participación</PreviewSectionLabel>
+            <PreviewText>{form.participationRules}</PreviewText>
+          </PreviewSection>
+        )}
+
+        <PreviewSection>
+          <PreviewSectionLabel>Criterios de evaluación</PreviewSectionLabel>
+          <PreviewCriteriaList>
+            {form.evaluationCriteria.some(c => c.enabled) ? (
+              form.evaluationCriteria.filter(c => c.enabled).map(c => (
+                <PreviewCriteriaChip key={c.id}>
+                  <span>{c.name}</span>
+                  <PreviewWeightBadge>{c.weight}%</PreviewWeightBadge>
+                </PreviewCriteriaChip>
+              ))
+            ) : (
+              <>
+                <span style={{ fontSize: 11, color: '#888', display: 'block', width: '100%', textAlign: 'center', marginBottom: 6, fontStyle: 'italic' }}>Reparto automático por defecto:</span>
+                <PreviewCriteriaChip>
+                  <span>Deseabilidad</span>
+                  <PreviewWeightBadge>33%</PreviewWeightBadge>
+                </PreviewCriteriaChip>
+                <PreviewCriteriaChip>
+                  <span>Factibilidad</span>
+                  <PreviewWeightBadge>33%</PreviewWeightBadge>
+                </PreviewCriteriaChip>
+                <PreviewCriteriaChip>
+                  <span>Alineación</span>
+                  <PreviewWeightBadge>34%</PreviewWeightBadge>
+                </PreviewCriteriaChip>
+              </>
+            )}
+          </PreviewCriteriaList>
+        </PreviewSection>
+
+        {!form.title && !form.problemDescription && !form.companyContext && (
+          <p style={{ fontSize: 13, color: '#c0c8d0', textAlign: 'center', marginTop: 32 }}>
+            Completa el formulario para ver la vista previa
+          </p>
+        )}
+      </PreviewCard>
+    </Wrapper>
+  </>
+  );
+};

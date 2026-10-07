@@ -1,0 +1,28 @@
+{
+    "hosting": {
+        "public": "dist",
+        "ignore": [
+            "firebase.json",
+            "**/.*",
+            "**/node_modules/**"
+        ],
+        "rewrites": [
+            {
+                "source": "/__/auth/action",
+                "destination": "/__/auth/action.html"
+            },
+            {
+                "source": "**",
+                "destination": "/index.html"
+            }
+        ],
+        "headers": [
+            {
+                "source": "/__/auth/action.html",
+                "headers": [
+                    { "key": "Cache-Control", "value": "no-cache" }
+                ]
+            }
+        ]
+    }
+}

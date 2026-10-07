@@ -1,0 +1,70 @@
+import { Suspense, lazy } from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { DashboardLayout } from './DashboardLayout';
+import { WithRoleGuard } from './WithRoleGuard';
+import { useAuth } from '../../../context/AuthContext';
+import { DashboardSkeleton } from './DashboardSkeleton';
+import AccessConfigPage from '../../admin/AccessConfigPage';
+import NotFoundPage from '../../../components/errors/NotFoundPage';
+
+const AdminStatsView = lazy(() => import('../views/admin').then(m => ({ default: m.AdminStatsView })));
+const AdminClientsView = lazy(() => import('../views/admin').then(m => ({ default: m.AdminClientsView })));
+const AdminAccessView = lazy(() => import('../views/admin').then(m => ({ default: m.AdminAccessView })));
+const AdminUsersView = lazy(() => import('../views/admin').then(m => ({ default: m.AdminUsersView })));
+
+const CompanyStatsView = lazy(() => import('../views/company').then(m => ({ default: m.CompanyStatsView })));
+const CompanyChallengesView = lazy(() => import('../views/company').then(m => ({ default: m.CompanyChallengesView })));
+const CompanyCriteriaView = lazy(() => import('../views/company').then(m => ({ default: m.CompanyCriteriaView })));
+const CompanyPodiumView = lazy(() => import('../views/company').then(m => ({ default: m.CompanyPodiumView })));
+
+const ChallengeVinculacionView = lazy(() => import('../views/company/ChallengeVinculacionView').then(m => ({ default: m.ChallengeVinculacionView })));
+
+const JudgeInboxView = lazy(() => import('../views/judge').then(m => ({ default: m.JudgeInboxView })));
+const JudgeEvaluationView = lazy(() => import('../views/judge').then(m => ({ default: m.JudgeEvaluationView })));
+const JudgeHistoryView = lazy(() => import('../views/judge').then(m => ({ default: m.JudgeHistoryView })));
+const JudgeIdeaFormView = lazy(() => import('../views/judge/JudgeIdeaFormView'));
+
+const DashboardIndexRedirect = () => {
+  const { userProfile } = useAuth();
+  if (!userProfile) return null;
+  const role = (userProfile.roleInfo?.name || userProfile.role || '').toUpperCase();
+
+  if (role === 'ADMIN') return <Navigate to="/dashboard/admin/stats" replace />;
+  if (role === 'ORGANIZATION') return <Navigate to="/dashboard/company/stats" replace />;
+  if (role === 'JUDGE') return <Navigate to="/dashboard/judge/inbox" replace />;
+
+  return <Navigate to="/" replace />;
+};
+
+export const DashboardRoutes = () => {
+  return (
+    <DashboardLayout>
+      <Suspense fallback={<DashboardSkeleton />}>
+        <Routes>
+          <Route path="admin/stats" element={<WithRoleGuard allowedRoles={['ADMIN']}><AdminStatsView /></WithRoleGuard>} />
+          <Route path="admin/clients" element={<WithRoleGuard allowedRoles={['ADMIN']}><AdminClientsView /></WithRoleGuard>} />
+          <Route path="admin/access" element={<WithRoleGuard allowedRoles={['ADMIN']}><AdminAccessView /></WithRoleGuard>} />
+          <Route path="admin/whitelist" element={<WithRoleGuard allowedRoles={['ADMIN']}><AccessConfigPage /></WithRoleGuard>} />
+          <Route path="admin/access-config" element={<WithRoleGuard allowedRoles={['ADMIN']}><AccessConfigPage /></WithRoleGuard>} />
+          <Route path="admin/users" element={<WithRoleGuard allowedRoles={['ADMIN']}><AdminUsersView /></WithRoleGuard>} />
+
+          <Route path="company/stats" element={<WithRoleGuard allowedRoles={['ORGANIZATION']}><CompanyStatsView /></WithRoleGuard>} />
+          <Route path="company/challenges" element={<WithRoleGuard allowedRoles={['ORGANIZATION']}><CompanyChallengesView /></WithRoleGuard>} />
+          <Route path="company/criteria" element={<WithRoleGuard allowedRoles={['ORGANIZATION']}><CompanyCriteriaView /></WithRoleGuard>} />
+          <Route path="company/podium" element={<WithRoleGuard allowedRoles={['ORGANIZATION']}><CompanyPodiumView /></WithRoleGuard>} />
+          <Route path="company/judges" element={<WithRoleGuard allowedRoles={['ORGANIZATION']}><ChallengeVinculacionView /></WithRoleGuard>} />
+
+          <Route path="judge/inbox" element={<WithRoleGuard allowedRoles={['JUDGE']}><JudgeInboxView /></WithRoleGuard>} />
+          <Route path="judge/evaluation/:challengeId?" element={<WithRoleGuard allowedRoles={['JUDGE']}><JudgeEvaluationView /></WithRoleGuard>} />
+          <Route path="judge/evaluation/:challengeId/idea/:ideaId" element={<WithRoleGuard allowedRoles={['JUDGE']}><JudgeIdeaFormView /></WithRoleGuard>} />
+          <Route path="judge/history" element={<WithRoleGuard allowedRoles={['JUDGE']}><JudgeHistoryView /></WithRoleGuard>} />
+          <Route path="judge/history/evaluation/:challengeId/idea/:ideaId" element={<WithRoleGuard allowedRoles={['JUDGE']}><JudgeIdeaFormView isReadOnlyMode={true} /></WithRoleGuard>} />
+
+          <Route path="/" element={<DashboardIndexRedirect />} />
+          <Route path="*" element={<NotFoundPage />} />
+          {import.meta.env.DEV && <Route path="dev/whitelist" element={<AccessConfigPage />} />}
+        </Routes>
+      </Suspense>
+    </DashboardLayout>
+  );
+};

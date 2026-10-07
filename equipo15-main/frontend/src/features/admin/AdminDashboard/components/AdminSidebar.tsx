@@ -1,0 +1,100 @@
+import React from 'react';
+import { NavLink } from 'react-router-dom';
+import * as S from '../styles/AdminStyles';
+import LogoutButton from '../../../dashboard/components/LogoutButton';
+import { resolveDisplayName } from '../../../../utils/user.utils';
+import Pista8Logo from '../../../../components/icons/Pista8Logo';
+
+interface AdminSidebarProps {
+  userProfile: any;
+  activeTab: string;
+  setActiveTab: (t: string) => void;
+  setShowForm: (b: boolean) => void;
+  setIsPreview: (b: boolean) => void;
+  handleLogout: () => void;
+}
+
+const AdminSidebar: React.FC<AdminSidebarProps> = ({
+  userProfile, activeTab, setActiveTab, setShowForm, setIsPreview, handleLogout
+}) => {
+  const resetVews = () => {
+    setShowForm(false);
+    setIsPreview(false);
+  };
+
+  const isAdmin = Boolean(
+    userProfile && (
+      (userProfile.role || '').toString().toLowerCase() === 'admin' ||
+      (userProfile.roleName || '').toString().toLowerCase() === 'admin' ||
+      (userProfile.roleInfo?.name || '').toString().toLowerCase() === 'admin' ||
+      (userProfile.roleId?.name || '').toString().toLowerCase() === 'admin'
+    ),
+  );
+
+  return (
+    <S.Sidebar>
+      <div style={{ flex: 1 }}>
+        <S.SidebarBrand>
+          <Pista8Logo variant="white" width={130} />
+        </S.SidebarBrand>
+
+        <S.UserProfileBlock>
+          <S.RoleTag>{userProfile?.roleId?.name?.toUpperCase() || userProfile?.role?.toUpperCase()}</S.RoleTag>
+          <S.UserName>{resolveDisplayName(userProfile)}</S.UserName>
+        </S.UserProfileBlock>
+
+        <S.SidebarNav>
+          <S.NavBtn as={NavLink} to="/dashboard/perfil">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+            Mi Perfil
+          </S.NavBtn>
+
+          <S.SidebarDivider />
+
+          <S.NavBtn active={activeTab === 'challenges'} onClick={() => { setActiveTab('challenges'); resetVews(); }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
+            </svg>
+            Gestión de Retos
+          </S.NavBtn>
+          <S.NavBtn active={activeTab === 'stats'} onClick={() => { setActiveTab('stats'); resetVews(); }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Estadísticas
+          </S.NavBtn>
+          {isAdmin && (
+            <S.NavBtn active={activeTab === 'users'} onClick={() => { setActiveTab('users'); resetVews(); }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+              Gestión de Usuarios
+            </S.NavBtn>
+          )}
+          {isAdmin && (
+            <S.NavBtn active={activeTab === 'whitelist'} onClick={() => { setActiveTab('whitelist'); resetVews(); }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 7h18" />
+                <path d="M3 12h18" />
+                <path d="M3 17h18" />
+              </svg>
+              Dominios autorizados
+            </S.NavBtn>
+          )}
+        </S.SidebarNav>
+      </div>
+
+      <S.SidebarFooter>
+        <LogoutButton onClick={handleLogout} />
+      </S.SidebarFooter>
+    </S.Sidebar>
+  );
+};
+
+export default AdminSidebar;

@@ -1,0 +1,735 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+generator dbml {
+  provider = "prisma-dbml-generator"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── ENUMS ─────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  ORGANIZATION
+  JUDGE
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  SOFT_BLOCK
+  SUSPENDED
+  DELETED
+}
+
+enum ChallengeStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  EVALUATING
+  CLOSED
+}
+
+enum IdeaStatus {
+  DRAFT
+  PUBLISHED
+  FINALIST
+  WINNER
+  DISQUALIFIED
+}
+
+enum CommentStatus {
+  VISIBLE
+  HIDDEN
+  FLAGGED
+}
+
+enum ReactionType {
+  GOOD
+  FUTURE
+  COMPLEX
+  FAVORITE
+}
+
+enum ImpactArea {
+  PRODUCTIVIDAD
+  COSTOS
+  CLIENTES
+  EQUIPO
+  CRECIMIENTO
+  SOSTENIBILIDAD
+  IMPACTO_SOCIAL
+}
+
+enum ImprovementType {
+  OPTIMIZA
+  POTENCIA
+  EXPANDE
+  TRANSFORMA
+}
+
+enum EffortLevel {
+  FACIL_IMPLEMENTAR
+  REQUIERE_COORDINACION
+  REQUIERE_DESARROLLO
+  REQUIERE_TRANSFORMACION
+}
+
+enum Platform {
+  IOS
+  ANDROID
+  WEB
+}
+
+enum PointReason {
+  IDEA_PUBLISHED
+  COMMENT_POSTED
+  LIKE_GIVEN
+  IDEA_WINNER
+  IDEA_FINALIST
+  PENALTY_DEDUCTION
+}
+
+enum NotifType {
+  IDEA_LIKED
+  COMMENT_RECEIVED
+  EVALUATION_COMPLETE
+  CHALLENGE_STARTED
+  CHALLENGE_CLOSED
+  WINNER_ANNOUNCED
+  PENALTY_APPLIED
+  JUDGE_REMOVED
+  ROLE_UPDATED
+  NEW_CHALLENGE_PUBLISHED
+  NEW_COMMENT
+  IDEA_REACTION
+  COMMENT_REPLY
+  CHALLENGE_EXPIRING
+  EVALUATION_STARTED
+  EVALUATION_SUBMITTED
+  JUDGE_ASSIGNED
+}
+
+enum PenaltyReason {
+  EXCESSIVE_LIKE_REMOVAL
+  COMMENT_ABUSE
+  SPAM
+  ADMIN_MANUAL
+}
+
+enum AuditAction {
+  DELETE_COMMENT
+  DELETE_IDEA
+  BLOCK_USER
+  SUSPEND_USER
+  CLOSE_CHALLENGE
+  ASSIGN_JUDGE
+  REVOKE_PENALTY
+}
+
+enum WinnerCategory {
+  GENERAL
+  MAS_VOTADA
+  MAS_INNOVADORA
+}
+
+enum AccessGrantedVia {
+  FACULTY
+  TOKEN
+  ADMIN
+}
+
+// ============================================================
+// INSTITUCIONAL
+// ============================================================
+
+model Faculty {
+  id             String   @id @default(uuid())
+  name           String
+  organizationId String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization       OrganizationProfile? @relation(fields: [organizationId], references: [userId], onDelete: Cascade)
+  studentProfiles    StudentProfile[]
+  challengeFaculties ChallengeFaculty[]
+
+  @@map("faculties")
+}
+
+// ============================================================
+// USUARIOS
+// ============================================================
+
+model User {
+  id          String     @id @default(uuid())
+  firebaseUid String     @unique
+  email       String     @unique
+  displayName String
+  bio         String?
+  nickname    String?
+  phone       String?    @unique
+  role        UserRole   @default(USER)
+  totalPoints Int        @default(0)
+  status      UserStatus @default(ACTIVE)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  studentProfile      StudentProfile?
+  organizationProfile OrganizationProfile?
+
+  devices           UserDevice[]
+  notifications     Notification[]
+  pointTransactions PointTransaction[]
+
+  penalties        Penalty[] @relation("PenaltyUser")
+  appliedPenalties Penalty[] @relation("PenaltyAppliedBy")
+  revokedPenalties Penalty[] @relation("PenaltyRevokedBy")
+
+  ideas        Idea[] @relation("IdeaAuthor")
+  deletedIdeas Idea[] @relation("IdeaDeletedBy")
+
+  authoredChallenges Challenge[]
+
+  judgeAssignments ChallengeJudge[] @relation("JudgeUser")
+  madeAssignments  ChallengeJudge[] @relation("AssignedByUser")
+
+  privateAccesses PrivateChallengeAccess[]
+
+  reactions       IdeaReaction[]
+  comments        Comment[]      @relation("CommentAuthor")
+  deletedComments Comment[]      @relation("CommentDeletedBy")
+
+  evaluations Evaluation[]
+
+  mentorshipSessions MentorshipSession[]
+
+  auditLogs AuditLog[]
+
+  @@index([status])
+  @@map("users")
+}
+
+// ============================================================
+// PERFILES ESPECIALIZADOS
+// ============================================================
+
+model StudentProfile {
+  userId         String   @id
+  studentCode    String?
+  facultyId      String?
+  enrollmentYear Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  faculty Faculty? @relation(fields: [facultyId], references: [id], onDelete: SetNull)
+
+  @@map("student_profiles")
+}
+
+model OrganizationProfile {
+  userId      String   @id
+  logoUrl     String?
+  website     String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  faculties Faculty[]
+
+  @@map("organization_profiles")
+}
+
+// ============================================================
+// DISPOSITIVOS
+// ============================================================
+
+model UserDevice {
+  id         String    @id @default(uuid())
+  userId     String
+  fcmToken   String
+  deviceName String?
+  platform   Platform?
+  lastSeenAt DateTime?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fcmToken], name: "uq_token_per_user")
+  @@index([userId])
+  @@map("user_devices")
+}
+
+// ============================================================
+// NOTIFICACIONES
+// ============================================================
+
+model Notification {
+  id     String    @id @default(uuid())
+  userId String
+  type   NotifType
+  title  String
+  body   String?
+
+  ideaId       String?
+  commentId    String?
+  challengeId  String?
+  evaluationId String?
+
+  readAt    DateTime?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idea       Idea?       @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  comment    Comment?    @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  challenge  Challenge?  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  evaluation Evaluation? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@index([ideaId])
+  @@index([commentId])
+  @@index([challengeId])
+  @@map("notifications")
+}
+
+// ============================================================
+// PUNTOS
+// ============================================================
+
+model PointTransaction {
+  id     String      @id @default(uuid())
+  userId String
+  delta  Int
+  reason PointReason
+
+  ideaId       String?
+  commentId    String?
+  challengeId  String?
+  evaluationId String?
+
+  createdAt DateTime @default(now())
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idea       Idea?       @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  comment    Comment?    @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  challenge  Challenge?  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  evaluation Evaluation? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([reason])
+  @@index([ideaId])
+  @@index([commentId])
+  @@index([challengeId])
+  @@map("point_transactions")
+}
+
+// ============================================================
+// PENALIZACIONES
+// ============================================================
+
+model Penalty {
+  id          String        @id @default(uuid())
+  userId      String
+  reason      PenaltyReason
+  appliedById String?
+  isAutomatic Boolean       @default(false)
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  revokedById String?
+  createdAt   DateTime      @default(now())
+
+  user      User  @relation("PenaltyUser", fields: [userId], references: [id], onDelete: Cascade)
+  appliedBy User? @relation("PenaltyAppliedBy", fields: [appliedById], references: [id], onDelete: SetNull)
+  revokedBy User? @relation("PenaltyRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, expiresAt])
+  @@index([userId, revokedAt])
+  @@map("penalties")
+}
+
+// ============================================================
+// RETOS
+// ============================================================
+
+model Challenge {
+  id                 String          @id @default(uuid())
+  title              String
+  problemDescription String?
+  companyContext     String?
+  participationRules String?
+  publishedAt        DateTime?
+  submissionsOpenAt  DateTime?
+  submissionsCloseAt DateTime?
+  isPrivate          Boolean         @default(false)
+  accessToken        String?         @unique
+  status             ChallengeStatus @default(DRAFT)
+  authorId           String
+  podiumSize         Int?
+  logoUrl            String?         @db.Text
+  targetAudience     Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  challengeFaculties ChallengeFaculty[]
+  ideas              Idea[]
+  challengeCriteria  ChallengeCriterion[]
+  judges             ChallengeJudge[]
+  privateAccesses    PrivateChallengeAccess[]
+  winners            ChallengeWinner[]
+  notifications      Notification[]
+  pointTransactions  PointTransaction[]
+
+  @@index([status])
+  @@index([authorId])
+  @@index([status, publishedAt])
+  @@index([authorId, status])
+  @@map("challenges")
+}
+
+model ChallengeFaculty {
+  challengeId String
+  facultyId   String
+  assignedAt  DateTime @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  faculty   Faculty   @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+
+  @@id([challengeId, facultyId])
+  @@map("challenge_faculties")
+}
+
+// ============================================================
+// ACCESO A RETOS PRIVADOS
+// ============================================================
+
+model PrivateChallengeAccess {
+  id          String           @id @default(uuid())
+  challengeId String
+  userId      String
+  grantedVia  AccessGrantedVia
+  grantedAt   DateTime         @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId], name: "uq_access_per_user")
+  @@index([challengeId])
+  @@index([userId])
+  @@map("private_challenge_accesses")
+}
+
+// ============================================================
+// CRITERIOS DE EVALUACIÓN
+// ============================================================
+
+model Criterion {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  type        String  @default("DEFAULT") // DEFAULT, OPTIONAL, CUSTOM
+
+  challengeCriteria ChallengeCriterion[]
+
+  @@map("criteria")
+}
+
+model ChallengeCriterion {
+  id          String   @id @default(uuid())
+  challengeId String
+  criterionId String
+  weight      Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  challenge        Challenge         @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  criterion        Criterion         @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  evaluationScores EvaluationScore[]
+
+  @@unique([challengeId, criterionId], name: "uq_challenge_criterion")
+  @@index([challengeId])
+  @@index([criterionId])
+  @@map("challenge_criteria")
+}
+
+// ============================================================
+// ASIGNACIÓN DE JUECES
+// ============================================================
+
+model ChallengeJudge {
+  challengeId  String
+  judgeId      String
+  assignedById String
+  assignedAt   DateTime @default(now())
+
+  challenge  Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  judge      User      @relation("JudgeUser", fields: [judgeId], references: [id], onDelete: Cascade)
+  assignedBy User      @relation("AssignedByUser", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  @@id([challengeId, judgeId])
+  @@index([judgeId])
+  @@map("challenge_judges")
+}
+
+// ============================================================
+// IDEAS
+// ============================================================
+
+model Idea {
+  id          String     @id @default(uuid())
+  title       String
+  problem     String
+  solution    String
+  isAnonymous Boolean    @default(false)
+  authorId    String
+  challengeId String
+  status      IdeaStatus @default(PUBLISHED)
+
+  likesCount     Int   @default(0)
+  goodCount      Int   @default(0)
+  futureCount    Int   @default(0)
+  complexCount   Int   @default(0)
+  fireScore      Float @default(0)
+  commentsCount  Int   @default(0)
+  favoritesCount Int   @default(0)
+  finalScore     Float @default(0)
+
+  multimediaLinks Json?
+
+  impactArea      ImpactArea?
+  improvementType ImprovementType?
+  effortLevel     EffortLevel?
+
+  deletedAt    DateTime?
+  deletedById  String?
+  deleteReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author    User      @relation("IdeaAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Restrict)
+  deletedBy User?     @relation("IdeaDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+
+  reactions          IdeaReaction[]
+  comments           Comment[]
+  evaluations        Evaluation[]
+  mentorshipSessions MentorshipSession[]
+  winners            ChallengeWinner[]
+  notifications      Notification[]
+  pointTransactions  PointTransaction[]
+
+  @@index([challengeId])
+  @@index([authorId])
+  @@index([status])
+  @@index([challengeId, status, createdAt])
+  @@index([challengeId, likesCount])
+  @@map("ideas")
+}
+
+// ============================================================
+// MENTORÍA
+// ============================================================
+
+model MentorshipSession {
+  id          String   @id @default(uuid())
+  ideaId      String
+  mentorId    String
+  feedback    String
+  sessionDate DateTime
+  topics      String?
+  createdAt   DateTime @default(now())
+
+  idea   Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  mentor User @relation(fields: [mentorId], references: [id], onDelete: Restrict)
+
+  @@index([ideaId])
+  @@index([mentorId])
+  @@index([ideaId, mentorId, sessionDate])
+  @@map("mentorship_sessions")
+}
+
+// ============================================================
+// REACCIONES
+// ============================================================
+
+model IdeaReaction {
+  id        String       @id @default(uuid())
+  ideaId    String
+  userId    String
+  type      ReactionType
+  createdAt DateTime     @default(now())
+
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([ideaId, userId, type], name: "uq_reaction_per_type")
+  @@index([ideaId])
+  @@index([userId])
+  @@index([userId, type])
+  @@map("idea_reactions")
+}
+
+// ============================================================
+// COMENTARIOS
+// ============================================================
+
+model Comment {
+  id              String        @id @default(uuid())
+  content         String
+  authorId        String
+  ideaId          String
+  parentCommentId String?
+  status          CommentStatus @default(VISIBLE)
+  editCount       Int           @default(0)
+  deletedById     String?
+  deleteReason    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  editedAt        DateTime?
+  deletedAt       DateTime?
+
+  author            User               @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  idea              Idea               @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  deletedBy         User?              @relation("CommentDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+  parent            Comment?           @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies           Comment[]          @relation("CommentReplies")
+  notifications     Notification[]
+  pointTransactions PointTransaction[]
+
+  @@index([ideaId])
+  @@index([authorId])
+  @@index([parentCommentId])
+  @@index([status])
+  @@index([ideaId, status, createdAt])
+  @@map("comments")
+}
+
+// ============================================================
+// EVALUACIONES
+// ============================================================
+
+model Evaluation {
+  id        String   @id @default(uuid())
+  ideaId    String
+  judgeId   String
+  feedback  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  idea  Idea @relation(fields: [ideaId], references: [id], onDelete: Restrict)
+  judge User @relation(fields: [judgeId], references: [id], onDelete: Restrict)
+
+  scores            EvaluationScore[]
+  notifications     Notification[]
+  pointTransactions PointTransaction[]
+
+  @@unique([ideaId, judgeId], name: "uq_evaluation_per_judge")
+  @@index([ideaId])
+  @@index([judgeId])
+  @@map("evaluations")
+}
+
+// ============================================================
+// SCORES DE EVALUACIÓN
+// ============================================================
+
+model EvaluationScore {
+  id                   String   @id @default(uuid())
+  evaluationId         String
+  challengeCriterionId String
+  score                Int
+  createdAt            DateTime @default(now())
+
+  evaluation         Evaluation         @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  challengeCriterion ChallengeCriterion @relation(fields: [challengeCriterionId], references: [id], onDelete: Restrict)
+
+  @@unique([evaluationId, challengeCriterionId], name: "uq_score_per_criterion")
+  @@index([evaluationId])
+  @@index([challengeCriterionId])
+  @@map("evaluation_scores")
+}
+
+// ============================================================
+// GANADORES
+// ============================================================
+
+model ChallengeWinner {
+  id          String         @id @default(uuid())
+  challengeId String
+  ideaId      String
+  category    WinnerCategory
+  position    Int
+  createdAt   DateTime       @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Restrict)
+  idea      Idea      @relation(fields: [ideaId], references: [id], onDelete: Restrict)
+
+  @@unique([challengeId, ideaId, category], name: "uq_winner_per_category")
+  @@unique([challengeId, category, position], name: "uq_position_per_category")
+  @@index([ideaId])
+  @@map("challenge_winners")
+}
+
+// ============================================================
+// ANALYTICS
+// ============================================================
+
+model GlobalMetric {
+  key       String   @id
+  value     BigInt   @default(0)
+  valueJson Json?
+  updatedAt DateTime @default(now())
+
+  @@map("global_metrics")
+}
+
+// ============================================================
+// AUDITORÍA
+// ============================================================
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  adminId    String
+  action     AuditAction
+  targetType String
+  targetId   String
+  reason     String?
+  snapshot   Json?
+  createdAt  DateTime    @default(now())
+
+  admin User @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId])
+  @@index([targetType, targetId])
+  @@index([adminId, createdAt])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model AllowedDomain {
+  id        String   @id @default(uuid())
+  domain    String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("allowed_domains")
+}

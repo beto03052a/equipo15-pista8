@@ -1,0 +1,163 @@
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Patch,
+  Delete,
+  Param,
+  UseGuards,
+  Query,
+  Req,
+} from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
+import { PaginationDto } from '../../common/dto/pagination.dto';
+import { IdeaService } from './idea.service';
+import { CreateIdeaDto } from './dtos/create-idea.dto';
+import { CreateDraftIdeaDto } from './dtos/create-draft-idea.dto';
+import { UpdateIdeaDto } from './dtos/update-idea.dto';
+import { UpdateIdeaStatusDto } from './dtos/update-idea-status.dto';
+import { FirebaseAuthGuard } from '../../common/guards/firebase-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/guards/roles.decorator';
+import type { AuthenticatedRequest } from '../../common/types/authenticated-request.interface';
+
+@ApiTags('Ideas')
+@ApiBearerAuth()
+@UseGuards(FirebaseAuthGuard)
+@Controller('ideas')
+export class IdeasController {
+  constructor(private readonly ideaService: IdeaService) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Submit a new idea' })
+  create(
+    @Body() createIdeaDto: CreateIdeaDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.ideaService.create(createIdeaDto, request.user.uid);
+  }
+
+  @Post('drafts')
+  @ApiOperation({ summary: 'Save an idea as a draft' })
+  createDraft(
+    @Body() createDraftIdeaDto: CreateDraftIdeaDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.ideaService.createDraft(createDraftIdeaDto, request.user.uid);
+  }
+
+  @Get('me')
+  @ApiOperation({ summary: 'Get ideas of the current authenticated user' })
+  findMyIdeas(@Req() request: AuthenticatedRequest) {
+    return this.ideaService.findMyIdeas(request.user.uid);
+  }
+
+  @Get('me/drafts')
+  @ApiOperation({
+    summary: 'Get draft ideas of the current authenticated user',
+  })
+  findMyDrafts(@Req() request: AuthenticatedRequest) {
+    return this.ideaService.findMyDrafts(request.user.uid);
+  }
+
+  @Get()
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Get all ideas (optionally filter by public only)' })
+  @ApiQuery({ name: 'public', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({
+    name: 'sort',
+    required: false,
+    enum: ['newest', 'oldest', 'likes', 'comments'],
+  })
+  findAll(
+    @Query('public') isPublic?: string,
+    @Query() paginationDto?: PaginationDto,
+    @Req() request?: AuthenticatedRequest,
+  ) {
+    if (isPublic === 'true') {
+      return this.ideaService.findAllPublic(paginationDto, request?.user?.uid);
+    }
+    return this.ideaService.findAll(paginationDto);
+  }
+
+  @Patch(':id/status')
+  @UseGuards(RolesGuard)
+  @Roles('admin')
+  @ApiOperation({ summary: 'Update the status of an idea (Admin only)' })
+  updateStatus(@Param('id') id: string, @Body() dto: UpdateIdeaStatusDto) {
+    return this.ideaService.updateStatus(id, dto.status);
+  }
+
+  @Patch(':id/draft')
+  @ApiOperation({ summary: 'Update a draft idea (author only)' })
+  updateDraft(
+    @Param('id') id: string,
+    @Body() updateDraftDto: CreateDraftIdeaDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.ideaService.updateDraft(id, updateDraftDto, request.user.uid);
+  }
+
+  @Delete(':id/draft')
+  @ApiOperation({ summary: 'Delete a draft idea (author only)' })
+  deleteDraft(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.ideaService.deleteDraft(id, request.user.uid);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete an idea (author or admin only)' })
+  deleteIdea(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.ideaService.deleteIdea(id, request.user.uid);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Edit an idea (author only)' })
+  updateIdea(
+    @Param('id') id: string,
+    @Body() updateIdeaDto: UpdateIdeaDto,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.ideaService.updateIdea(id, updateIdeaDto, request.user.uid);
+  }
+
+  @Post(':id/like')
+  @ApiOperation({ summary: 'Like or unlike an idea' })
+  addLike(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+    @Body('reactionType') reactionType?: string,
+  ) {
+    return this.ideaService.addLike(id, request.user.uid, reactionType);
+  }
+
+  @Post(':id/favorite')
+  @ApiOperation({ summary: 'Favorite or unfavorite an idea' })
+  toggleFavorite(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.ideaService.toggleFavorite(id, request.user.uid);
+  }
+
+  @Get('me/favorites')
+  @ApiOperation({ summary: 'Get ideas favorited by the current user' })
+  findMyFavorites(@Req() request: AuthenticatedRequest) {
+    return this.ideaService.findMyFavorites(request.user.uid);
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single idea by ID' })
+  findOne(@Param('id') id: string) {
+    return this.ideaService.findOne(id);
+  }
+}
